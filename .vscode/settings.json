@@ -1,0 +1,10 @@
+{
+    "cSpell.customDictionaries": {
+        "custom-dictionary-folder-maumind-it": {
+            "name": "custom-dictionary-folder-maumind-it",
+            "path": "${workspaceFolder:maumind-it}/.cspell/custom-dictionary-folder-maumind-it.txt",
+            "addWords": true,
+            "scope": "folder"
+        }
+    }
+}

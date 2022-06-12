@@ -1,0 +1,39 @@
+{
+  "name": "maudownit",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "tsc & cd ./build & node ../node_modules/mocha/bin/mocha"
+  },
+  "author": "",
+  "type": "commonjs",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/assert": "^1.5.6",
+    "@types/benchmark": "^2.1.1",
+    "@types/katex": "^0.14.0",
+    "@types/lodash": "^4.14.179",
+    "@types/markdown-it": "^12.2.3",
+    "@types/mocha": "^9.1.0",
+    "assert": "^2.0.0",
+    "benchmark": "^2.1.4",
+    "mocha": "^9.2.1",
+    "typescript": "^4.6.3"
+  },
+  "dependencies": {
+    "@ltd/j-toml": "^1.30.0",
+    "entities": "^4.3.0",
+    "katex": "^0.15.6",
+    "linkify-it": "^3.0.3",
+    "lodash": "^4.17.21",
+    "markdown-it": "^12.3.2",
+    "mathjax": "^3.2.1",
+    "nanoid": "^3.3.4",
+    "uc.micro": "^1.0.6"
+  }
+}

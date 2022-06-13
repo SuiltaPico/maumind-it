@@ -150,7 +150,7 @@ export default class MaudownIt {
       latex_render: "katex",
       indent_info: {
         mode: IndentMode.Unknown,
-        size: 4,
+        size: 0,
       },
       ...env
     }

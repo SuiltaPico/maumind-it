@@ -3,8 +3,8 @@ import is_space from "../common/is_space"
 import MaudownIt, { MaudownItEnv } from "..";
 import State from "./State";
 import {
-  count_indent, IndentInfo, IndentMode,
-  IndentSize, match_indent_mode, split_indent
+  count_indent_ch, IndentInfo, IndentMode,
+  IndentSize, match_indent_mode, split_indent, to_indent_size
 } from "../common/indent";
 import get_available_key, { get_available_keys } from "../common/get_available_key";
 import string_trim_clips from "../common/string_trim_clip";
@@ -24,9 +24,6 @@ export type BlockStateProps = {
 export default class BlockState extends State {
   /** 每行缩进单元的数量 */
   readonly indent_count: number[] = []
-
-  /** 需要的块内容缩进（例如，如果我们在一个列表中，它将被定位在列表标记之后）*/
-  block_indent = 0;
 
   /** content_src 中当前的行索引 */
   line_index = 0;
@@ -54,14 +51,6 @@ export default class BlockState extends State {
   /** 内容源码，没有缩进。 */
   readonly cs_arr: string[]
 
-  /** 内容源码长度 */
-  readonly cs_len: number
-
-  /** 内容源码 */
-  readonly content_src: string
-
-  readonly line_begin_index: number[]
-
   section_infos: [name: string, level: number, relative_level?: number][] = []
 
   rr_indexes: number[] = []
@@ -75,9 +64,41 @@ export default class BlockState extends State {
     console.time("block_state_init")
     this.tokens = tokens;
 
+
     let indent_info: IndentInfo = {
       mode: env.indent_info.mode,
       size: env.indent_info.size
+    }
+
+    const src_arr = src.split("\n")
+    const indent_count: number[] = (Array(src_arr.length) as number[]).fill(0, 0, src_arr.length)
+    const start_pos: number[] = []
+    const src_arr_len = src_arr.length
+
+    let last_start_pos = 0
+    for (let i = 0; i < src_arr.length; i++) {
+      const line_content = src_arr[i];
+      start_pos.push(last_start_pos)
+      last_start_pos += line_content.length
+    }
+
+    // 如果未确定缩进模式，先扫描
+
+    let scan_pointer = 0
+    if (indent_info.mode === IndentMode.Unknown) {
+      for (; scan_pointer < src_arr_len; scan_pointer++) {
+        const match_res = match_indent_mode(src_arr[scan_pointer])
+        if (match_res) {
+          indent_info = match_res
+          env.indent_info = indent_info
+          break
+        }
+      }
+    }
+
+    // 扫描缩进
+    for (; scan_pointer < src_arr_len; scan_pointer++) {
+      indent_count[scan_pointer] = count_indent_ch(src_arr[scan_pointer], indent_info)
     }
 
     // 内容保护块里可能包含注释代码，注释里也可能包含内容保护块的代码
@@ -89,26 +110,24 @@ export default class BlockState extends State {
     const RegExps = {
       /** 注释开始。匹配组：
        * 1. 边界标识 */
-      comments_start: /(?<cms_bdi>[\-]*)\/\*/,
+      comments_start: /([\-]*)\/\*/,
       /** 注释结束。匹配组：
        * 1. 边界标识 */
-      comments_end: /\*\/(?<cme_bdi>[\-]*)/,
+      comments_end: /\*\/([\-]*)/,
       /** 扩展块开始。匹配组：
        * 1. 边界标识
        * 2. 扩展块头 */
-      exblock_start: /(?<exs_bdi>[\-]*)\/([^{]+|\{[^{]+)\{{2}/,
+      exblock_start: /([\-]*)\/(?:[^{]+|\{[^{]+)\{{2}/,
       /** 扩展块结束。匹配组：
        * 1. 边界标识 */
-      exblock_end: /\}{2}\/(?<exe_bdi>[\-]*)$/,
+      exblock_end: /\}{2}\/([\-]*)$/,
       /** 围栏块开始。匹配组：
        * 1. 边界标识 */
-      fcblock_start: /(?<fcs_bdi>[\-]*)\`{3}/,
+      fcblock_start: /([\-]*)\`{3}/,
       /** 围栏块结束。匹配组：
        * 1. 边界标识 */
-      fcblock_end: /\`{3}(?<fce_bdi>[\-]*)$/,
+      fcblock_end: /\`{3}([\-]*)$/,
     } as const
-
-    const indent_RE = /^(?:(?:[ ]*)|(?:[\t]*))/gm
 
     // 将 `RegExps` 合并成一个具名正则表达式，并全局多行匹配
 
@@ -118,74 +137,68 @@ export default class BlockState extends State {
     })
     const RE = new RegExp(re_src_arr.join("|"), "gm")
     let match_result = [...src.matchAll(RE)]
-    let indent_result = [...src.matchAll(indent_RE)]
 
     // 收集要寻找的标记信息，每行第一个是 indent_src
 
     type MarkInfo = {
       type: keyof typeof RegExps | "indent_src",
-      value: {
-        /** 匹配项在源码的索引 */
-        index: number
-        /** 整个匹配项的长度 */
-        length: number
-        [key: string]: string | number
-      }
+      bdi: number
+      start_line: number
+      end_line: number
+      start: number
     }
     const marks: MarkInfo[] = []
 
     //console.log("re", RE)
 
-    match_result.forEach(r => {
-      const available_named_group: { [key: string]: string } = {}
+    let next_start_pos = -1
+    let line_index = 0
 
-      get_available_keys(r.groups!).forEach(k => {
-        available_named_group[k] = r.groups![k]
-      })
+    match_result.forEach(r => {
+      const index = r.index!
+      for (line_index; index < next_start_pos && line_index < src_arr_len; line_index++) {
+        next_start_pos = start_pos[line_index];
+      }
+      const start_line = line_index
+      for (line_index; index + r[0].length < next_start_pos && line_index < src_arr_len; line_index++) {
+        next_start_pos = start_pos[line_index];
+      }
+
+      let available_bdi = 0
+
+      for (let i = 1; i < 6; i++) {
+        const len = r[i]?.length
+        if (len !== 0) { available_bdi = len }
+      }
 
       marks.push({
         type: get_available_key(r.groups!) as keyof typeof RegExps,
-        value: {
-          ...available_named_group,
-          index: r.index!,
-          length: r[0].length
-        }
+        start_line: start_line,
+        end_line: line_index,
+        start: index,
+        bdi: r[1]?.length ?? 0
       })
     });
 
-    for (let i = 0; i < indent_result.length; i++) {
-      const r = indent_result[i];
-      marks.push({
-        type: "indent_src",
-        value: {
-          index: r.index!,
-          length: r[0].length
-        }
-      })
-    }
-
-    function get_mi_value_prop_length<T extends MarkInfo>(name: string, mi: T) {
-      return (mi.value[name] as string ?? "").length ?? 0
-    }
-
     // 识别内容保护块、注释、缩进
 
-    type BlockType = "" | "comments" | "fc" | "ex" | "indent"
+    type BlockType = "" | "comments" | "fc" | "ex"
     type StateBlockType = Exclude<BlockType, "indent">
 
-    const state = {
+    const inner_state = {
       bd_ident_num: 0,
       block_indent: 0,
       block_type: "" as StateBlockType,
-      block_start: -1,
+      block_start_line: -1,
     }
 
     type BlockInfo = {
       type: BlockType,
-      /** 片段的起始字符的位置 */
-      start: number,
-      /** 片段的结束字符的位置 */
-      end: number
+      /** 片段的起始行 */
+      start_line: number,
+      /** 片段的结束行 */
+      end_line: number,
+      indent: number
     }
     /** 包含以下 `src` 段的信息：
      * * `indent`：maudown 的有效缩进信息。注释和内容保护块的内容不计。
@@ -195,79 +208,43 @@ export default class BlockState extends State {
      */
     const block_infos: BlockInfo[] = []
 
-    function push_to_block_infos(type: Exclude<BlockType, "">, end: number, start?: number) {
+    function push_to_block_infos(type: Exclude<BlockType, "">, end_line: number, start_line?: number) {
       return block_infos.push({
-        type, end,
-        start: start === undefined ? state.block_start : start,
+        type,
+        start_line: start_line === undefined ? inner_state.block_start_line : start_line,
+        end_line: end_line,
+        indent: inner_state.block_indent
       })
     }
 
     /** 当前 block_type 为 indent */
     function not_in_block() {
-      return !state.block_type
+      return !inner_state.block_type
     }
 
     /** 当前 mask 是否位于行起始。忽略缩进。
-     * @param src_index 源代码的字符索引
      */
-    function is_at_line_begin(src_index: number) {
-      for (let i = block_infos.length - 1; i > -1; i--) {
-        const bi = block_infos[i];
-        // 判断能否接上上一个 block_infos 的 end
-        if (bi.end === src_index && bi.type === "indent") {
-          return true
-        } else { break }
-      }
-      return false
+    function is_at_line_begin(mark: MarkInfo) {
+      const indent = indent_count[mark.start_line]
+      return start_pos[mark.start_line] + indent * indent_info.size === mark.start;
     }
 
-    /** 获取 `block_infos` 的最后一个缩进段信息 */
-    function get_last_indent() {
-      for (let i = block_infos.length - 1; i > -1; i--) {
-        const bi = block_infos[i];
-        if (bi.type === "indent") { return bi }
+    function cpblock_start(block_type: Exclude<StateBlockType, "">, m: MarkInfo) {
+      if (is_at_line_begin(m) && not_in_block()) {
+        inner_state.block_type = block_type
+        inner_state.bd_ident_num = m.bdi
+        inner_state.block_start_line = m.start
+        inner_state.block_indent = indent_count[m.start_line]
       }
     }
 
-    /** 尝试获取上一个缩进段的缩进数
-     * @return 没有缩进段则为 0
-     */
-    function try_count_last_indent() {
-      const last_indent = get_last_indent()
-      if (last_indent && last_indent.start - last_indent.end !== 0) {
-        return count_indent(
-          src.slice(last_indent.start, last_indent.end),
-          indent_info
-        )
-      }
-      return 0
-    }
-
-    /** 如果缩进模式为 `IndentMode.Unknown` ，尝试利用 `src` 进行缩进匹配 */
-    function try_match_indent(src: string) {
-      if (src && indent_info.mode === IndentMode.Unknown) {
-        indent_info = { ...indent_info, ...match_indent_mode(src) }
-        env.indent_info.mode = indent_info.mode
-        env.indent_info.size = indent_info.size
-      }
-    }
-
-    function cpblock_start(block_type: Exclude<StateBlockType, "">, bdi_name: string, m: MarkInfo) {
-      if (is_at_line_begin(m.value.index) && not_in_block()) {
-        state.block_type = block_type
-        state.bd_ident_num = get_mi_value_prop_length(bdi_name, m)
-        state.block_start = m.value.index
-        state.block_indent = try_count_last_indent()
-      }
-    }
-
-    function cpblock_end(block_type: Exclude<StateBlockType, "">, bdi_name: string, m: MarkInfo) {
-      if (state.block_type === block_type
-        && get_mi_value_prop_length(bdi_name, m) === state.bd_ident_num
-        && try_count_last_indent() === state.block_indent
+    function cpblock_end(block_type: Exclude<StateBlockType, "">, m: MarkInfo) {
+      if (inner_state.block_type === block_type
+        && m.bdi === inner_state.bd_ident_num
+        && indent_count[m.start_line] === inner_state.block_indent
       ) {
-        push_to_block_infos(block_type, m.value.index + m.value.length)
-        state.block_type = ""
+        push_to_block_infos(block_type, m.end_line)
+        inner_state.block_type = ""
       }
     }
 
@@ -276,96 +253,52 @@ export default class BlockState extends State {
     // 2. `_end` 结束必须执行 state.block_type = ""
     marks.forEach((m) => {
       switch (m.type) {
-        case "indent_src":
-          let indent_src = src.slice(m.value.index, m.value.index + m.value.length)
-          if (not_in_block()) {
-            push_to_block_infos("indent", m.value.index + m.value.length, m.value.index)
-            try_match_indent(indent_src) // 尝试确认缩进模式
-          } else if (state.block_indent
-            && state.block_type === "ex" || state.block_type === "fc"
-          ) {
-            // 根据 state.block_indent 拆分缩进
-            let [indent] = split_indent(indent_src, state.block_indent, indent_info)
-            push_to_block_infos("indent", m.value.index + indent.length, m.value.index)
-            try_match_indent(indent)  // 尝试确认缩进模式
-          }
-          break
         case "comments_start":
-          cpblock_start("comments", "cms_bdi", m)
+          cpblock_start("comments", m)
           break
         case "comments_end":
-          cpblock_end("comments", "cme_bdi", m)
+          cpblock_end("comments", m)
           break
         case "exblock_start":
-          cpblock_start("ex", "exs_bdi", m)
+          cpblock_start("ex", m)
           break
         case "exblock_end":
-          cpblock_end("ex", "exe_bdi", m)
+          cpblock_end("ex", m)
           break
         case "fcblock_start":
-          cpblock_start("fc", "fcs_bdi", m)
+          cpblock_start("fc", m)
           break
         case "fcblock_end":
-          cpblock_end("fc", "fce_bdi", m)
+          cpblock_end("fc", m)
           break
         default:
           throw new Error(`The ${m.type} type of processing scheme is not defined`);
       }
     })
 
-    //console.log("marks", marks)
-    //console.log("block_infos", block_infos)
-
-    // 清除注释
-    let content_src: string = ""
-    let bi_len_count = 0
-
-    function remove_from_content_src(bis: BlockInfo[]) {
-      const pairs: [number, number][] = []
-      for (const bi of bis) {
-        bi.start -= bi_len_count
-        bi.end -= bi_len_count
-        pairs.push([bi.start, bi.end])
-        bi_len_count += (bi.end - bi.start)
+    for (let i = 0; i < block_infos.length; i++) {
+      const bi = block_infos[i];
+      if (bi.start_line + 1 < bi.end_line) {
+        for (let line_index = bi.start_line + 1; line_index < bi.end_line; line_index++) {
+          start_pos[line_index] = bi.indent
+        }
       }
-      content_src = string_trim_clips(src, pairs)
     }
 
-
-    const indents_bi = block_infos.filter((bi) => bi.type === "indent")
-
-    remove_from_content_src(indents_bi.filter((bi) => (bi.end - bi.start) > 0))
-    //console.log(content_src)
-
-    indents_bi.forEach((bi, i) => {
-      if (indent_info.mode === IndentMode.Unknown) {
-        this.indent_count.push(0)
-      } else {
-        this.indent_count.push(count_indent(
-          content_src.slice(bi.start, bi.end),
-          indent_info
-        ))
-      }
-    })
-
-    //console.log(content_src)
-    //console.log("indent_count", this.indent_count)
-
-    this.content_src = content_src
-    let index = 0
-    this.line_begin_index = []
-
-    const cs_arr = content_src.split("\n")
-    this.cs_arr = cs_arr
-
-    for (let i = 0; i < cs_arr.length; i++) {
-      const cs_line = cs_arr[i]
-      this.line_begin_index.push(index)
-      index += cs_line.length
+    for (let i = 0; i < src_arr_len; i++) {
+      src_arr[i] = src_arr[i].slice(indent_count[i]);
     }
 
-    this.line_count = this.cs_arr.length
-    this.cs_len = index
+    if (indent_info.size !== 0) {
+      for (let i = 0; i < src_arr_len; i++) {
+        indent_count[i] = Math.floor(indent_count[i] / indent_info.size)
+      }
+    }
+
+    this.cs_arr = src_arr
+    this.indent_count = indent_count
+    this.line_count = src_arr_len
+
     console.timeEnd("block_state_init")
   }
 
@@ -410,91 +343,91 @@ export default class BlockState extends State {
    * @param max 最大查找位置 + 1
    * @returns 跳转到的位置，若跳转失败则为 `-1`
    */
-  skip_chars(pos: number, code: number | number[], max = this.cs_len) {
-    if (pos > 0) {
-      switch (typeof code) {
-        case "number":
-          for (; pos < max; pos++) {
-            if (code !== this.content_src.charCodeAt(pos)) return pos;
-          }
-          break;
-        case "object":
-          for (; pos < max; pos++) {
-            let ch = this.content_src.charCodeAt(pos);
-            if (code.indexOf(ch) < 0) return pos;
-          }
-          break;
-      }
-    }
-    return -1;
-  };
+  // skip_chars(pos: number, code: number | number[], max = this.cs_len) {
+  //   if (pos > 0) {
+  //     switch (typeof code) {
+  //       case "number":
+  //         for (; pos < max; pos++) {
+  //           if (code !== this.content_src.charCodeAt(pos)) return pos;
+  //         }
+  //         break;
+  //       case "object":
+  //         for (; pos < max; pos++) {
+  //           let ch = this.content_src.charCodeAt(pos);
+  //           if (code.indexOf(ch) < 0) return pos;
+  //         }
+  //         break;
+  //     }
+  //   }
+  //   return -1;
+  // };
 
   /** 获取从位置 `pos` 开始，第一个 `skip_when` 判定为 `false` 的字符的位置
    * @param skip_when 判断 `cur_code` 为要跳过的字符时应返回 `true`，否则应返回 `false`。
    * @param max 最大查找位置 + 1
    * @returns 跳转到的位置，若跳转失败则为 `-1`
    */
-  skip_with(pos: number, skip_when: ((cur_code: number) => boolean), max = this.cs_len) {
-    if (pos > 0) {
-      for (; pos < max; pos++) {
-        if (!skip_when(this.content_src.charCodeAt(pos))) return pos;
-      }
-    }
-    return -1;
-  }
+  // skip_with(pos: number, skip_when: ((cur_code: number) => boolean), max = this.cs_len) {
+  //   if (pos > 0) {
+  //     for (; pos < max; pos++) {
+  //       if (!skip_when(this.content_src.charCodeAt(pos))) return pos;
+  //     }
+  //   }
+  //   return -1;
+  // }
 
   /** 获取从位置 `pos` 开始，逆向第一个不等于 `code` 的字符的位置
    * @param code 要跳过的字符码或数组。
    * @param min 最小查找位置 - 1
    * @returns 跳转到的位置，若跳转失败则为 `-1`
    */
-  skip_chars_back(pos: number, code: number | number[], min = -1) {
-    if (pos < this.cs_len) {
-      switch (typeof code) {
-        case "number":
-          for (; pos > min; pos--) {
-            if (code !== this.content_src.charCodeAt(pos)) return pos;
-          }
-          break;
-        case "object":
-          for (; pos > min; pos--) {
-            if (code.indexOf(this.content_src.charCodeAt(pos)) < 0) return pos;
-          }
-          break;
-      }
-    }
-    return -1;
-  }
+  // skip_chars_back(pos: number, code: number | number[], min = -1) {
+  //   if (pos < this.cs_len) {
+  //     switch (typeof code) {
+  //       case "number":
+  //         for (; pos > min; pos--) {
+  //           if (code !== this.content_src.charCodeAt(pos)) return pos;
+  //         }
+  //         break;
+  //       case "object":
+  //         for (; pos > min; pos--) {
+  //           if (code.indexOf(this.content_src.charCodeAt(pos)) < 0) return pos;
+  //         }
+  //         break;
+  //     }
+  //   }
+  //   return -1;
+  // }
 
   /** 获取从位置 `pos` 开始，逆向第一个 `skip_when` 判定为 `false` 的字符的位置
    * @param skip_when 判断 `cur_code` 为要跳过的字符时应返回 `true`，否则应返回 `false`。
    * @param min 最小查找位置 - 1
    * @returns 跳转到的位置，若跳转失败则为 `-1`
    */
-  skip_back_with(pos: number, skip_when: ((cur_code: number) => boolean), min = -1) {
-    if (pos < this.cs_len) {
-      for (; pos > min; pos--) {
-        if (!skip_when(this.content_src.charCodeAt(pos))) return pos;
-      }
-    }
-    return -1;
-  }
+  // skip_back_with(pos: number, skip_when: ((cur_code: number) => boolean), min = -1) {
+  //   if (pos < this.cs_len) {
+  //     for (; pos > min; pos--) {
+  //       if (!skip_when(this.content_src.charCodeAt(pos))) return pos;
+  //     }
+  //   }
+  //   return -1;
+  // }
 
   /** 获取从位置 `pos` 开始，第一个被 `is_space` 判定为 `false` 的字符的位置
    * @param max 最大查找位置 + 1
    * @returns 跳转到的位置，若跳转失败则为 `-1`
    */
-  skip_space(pos: number, max?: number) {
-    return this.skip_with(pos, is_space, max)
-  }
+  // skip_space(pos: number, max?: number) {
+  //   return this.skip_with(pos, is_space, max)
+  // }
 
   /** 获取从位置 `pos` 开始，逆向第一个被 `is_space` 判定为 `false` 的字符的位置
    * @param max 最小查找位置 - 1
    * @returns 跳转到的位置，若跳转失败则为 `-1`
    */
-  skip_space_back(pos: number, max?: number) {
-    return this.skip_back_with(pos, is_space, max)
-  }
+  // skip_space_back(pos: number, max?: number) {
+  //   return this.skip_back_with(pos, is_space, max)
+  // }
 
   /**
    * 获取指定行之间的内容。默认会拼合缩进。

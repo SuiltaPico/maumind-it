@@ -145,7 +145,7 @@ export default class ParserInline {
     this.tokenize(state);
 
     // console.log("inline", JSON.parse(JSON.stringify(state.tokens)))
-    //console.log("inline delimiters", JSON.parse(JSON.stringify(state.delimiters)))
+    // console.log("inline delimiters", JSON.parse(JSON.stringify(state.delimiters)))
 
     let rules = this.post_processing_ruler.get_rules_fn();
 
@@ -154,6 +154,6 @@ export default class ParserInline {
     }
 
     // console.log("inline post processing", state.tokens.slice())
-    // console.log("inline post processed delimiters", JSON.parse(JSON.stringify(state.delimiters)))
+    console.log("inline post processed delimiters", JSON.parse(JSON.stringify(state.delimiters)))
   }
 }

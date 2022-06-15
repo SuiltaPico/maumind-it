@@ -7,7 +7,7 @@ function process_delimiters(delimiters: Delimiter[]) {
 
   const pair_stack_map: {
     [closer_marker: number]: [
-      indexes: number[],
+      indexes: [index: number, level: number][],
       pointer: number
     ]
   } = {}
@@ -25,19 +25,37 @@ function process_delimiters(delimiters: Delimiter[]) {
     if (de.match_target !== undefined) {
       let closer_record = de.open ?
         pair_stack_map[de.match_target] : pair_stack_map[de.marker]
+
       if (!closer_record) {
         const len = Math.ceil(i / 2) + 1
-        closer_record = [Array(len).fill(-1), -1]
+        closer_record = [(Array(len) as [number, number][]), -1]
+        for (let x = 0; x < closer_record[0].length; x++) {
+          closer_record[0][x] = [-1, Infinity]
+        }
         pair_stack_map[de.marker] = closer_record
       }
+
+      const records = closer_record[0]
+
+      // 删除大于 level 的所有记录
+      let x = closer_record[1]
+      for (; x >= 0; x--) {
+        const record = records[x];
+        if (record[1] <= level) {
+          break
+        }
+      }
+      closer_record[1] = x
+
       if (de.close) {
         level++
         closer_record[1]++
-        closer_record[0][closer_record[1]] = i
+        records[closer_record[1]][0] = i
+        records[closer_record[1]][1] = level
       } else if (de.open) {
         level--
         if (closer_record[1] === -1) { continue }
-        de.end = closer_record[0][closer_record[1]]
+        de.end = records[closer_record[1]][0]
         closer_record[1]--
       }
     } else {

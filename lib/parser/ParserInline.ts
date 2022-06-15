@@ -6,7 +6,7 @@ import escape from "../rule/inline/escape";
 import fragments_join from "../rule/inline/fragments_join";
 import math, { math_post_processing } from "../rule/inline/latex";
 import newline from "../rule/inline/newline";
-import props from "../rule/inline/fragment_macro";
+import fragment_macro, { fragment_macro_post_processing } from "../rule/inline/fragment_macro";
 import text from "../rule/inline/text";
 import { RulerList } from "../Ruler/RulerList";
 import InlineState from "../state/InlineState";
@@ -24,6 +24,7 @@ const rules: [string, InlineRuleProcessor, string[]?][] = [
   ['bold', bold],
   ['emphasis', emphasis],
   ['math', math],
+  ['fragment_macro', fragment_macro],
   /*[ 'link',            require('./rules_inline/link') ],
   [ 'image',           require('./rules_inline/image') ],
   [ 'autolink',        require('./rules_inline/autolink') ],
@@ -37,9 +38,10 @@ const post_processing_rules: [string, InlineRulePPProcessor, string[]?][] = [
   ['bold_post_processing', bold_post_processing],
   ['emphasis_post_processing', emphasis_post_processing],
   ["math_post_processing", math_post_processing],
+  ['fragment_macro_post_processing', fragment_macro_post_processing],
   // 成对规则将“**”分隔为其自己的文本标记，这些标记可能未使用，下面的规则将未使用的段与其余文本合并回来
   ['fragments_join', fragments_join],
-  ["props", props],
+  ["props", fragment_macro],
 ];
 
 export default class ParserInline {
@@ -143,7 +145,7 @@ export default class ParserInline {
     this.tokenize(state);
 
     // console.log("inline", JSON.parse(JSON.stringify(state.tokens)))
-    // console.log("inline delimiters", JSON.parse(JSON.stringify(state.delimiters)))
+    //console.log("inline delimiters", JSON.parse(JSON.stringify(state.delimiters)))
 
     let rules = this.post_processing_ruler.get_rules_fn();
 

@@ -1,87 +1,95 @@
 import { InlineRulePPProcessor, InlineRuleProcessor } from "../../parser/ParserInline";
+import InlineState, { Delimiter } from "../../state/InlineState";
 import { Nesting } from "../../Token";
 
-export const macro: InlineRuleProcessor = (state, silent) => {
-  const fm_call_open_pos = state.pos
-  const len = state.src_len
+const match_target_map = {
+  0x5b: 0x5d,
+  0x7b: 0x7d,
+  0x5d: 0x5b,
+  0x7d: 0x7b,
+}
 
-  const first_ch = state.src.charCodeAt(fm_call_open_pos);
-  if (first_ch !== 0x5B /* [ */) { return false }
+const fragment_macro: InlineRuleProcessor = (state, silent) => {
+  if (silent) { return false; }
+  const first_code = state.src.charCodeAt(state.pos);
 
-  let has_bdi = false
-  let bdi_count = 0
+  if (first_code !== 0x5b /* [ */ && first_code !== 0x5d /* ] */
+    && first_code !== 0x7b /* { */ && first_code !== 0x7d /* } */
+  ) {
+    return false
+  }
 
-  let ch = state.src.charCodeAt(fm_call_open_pos + 1);
-  let pos: number
-  let fm_call_close_pos
+  const token = state.push('text', '', Nesting.SelfClosing);
+  token.content = String.fromCharCode(first_code);
 
-  // 匹配 `([^\]]|\][^{])+`，找到内联片段宏的开始与关闭符号
-  for (pos = fm_call_open_pos + 1; ;) {
-    pos += 1
-    if (pos >= len) { return false }
+  const delimiters = state.delimiters;
+  delimiters.push({
+    marker: first_code,
+    length: 1,
+    token_index: state.tokens.length - 1,
+    end: -1,
+    open: first_code === 0x5b || first_code === 0x7b,
+    close: first_code === 0x5d || first_code === 0x7d,
+    near_word: false,
+    match_target: match_target_map[first_code]
+  });
 
-    const next_ch = state.src.charCodeAt(pos);
-    if (
-      ch === 0x5D /* ] */
-      && (
-        next_ch === 0x7b /* { */
-        || (next_ch === 0x23 /* # */ && (has_bdi = true))
-      )
+  state.pos += 1;
+
+  return true;
+}
+
+export default fragment_macro;
+
+function process_delimiters(state: InlineState, delimiters: Delimiter[]) {
+  const processor = (start_delimiter: Delimiter, end_delimiter: Delimiter, start_index: number) => {
+    const header_end_index = start_delimiter.end
+    if (!delimiters[header_end_index + 1]) { return 0 }
+
+    const body_start_delimiter = delimiters[header_end_index + 1]
+
+    if (body_start_delimiter.marker !== 0x7b
+      || body_start_delimiter.token_index !== end_delimiter.token_index + 1
+      || body_start_delimiter.end === -1
     ) {
-      fm_call_close_pos = pos
-      break
+      return 0
     }
-    ch = next_ch
+
+    const tokens = state.tokens;
+
+    const header_tokens = tokens.slice(
+      start_delimiter.token_index + 1,
+      end_delimiter.token_index
+    );
+
+
+    const body_tokens = tokens.slice(
+      body_start_delimiter.token_index + 1,
+      delimiters[body_start_delimiter.end].token_index
+    )
+
+    body_tokens.forEach(t => {
+      t.content = ""
+    })
+    
+
+    return 3
   }
 
-  // 统计 bdi 的个数
-  if (has_bdi) {
-    bdi_count = 1
-    // 跳过第一个 `#`，因为前面已经判断过了
-    for (pos += 2; ;) {
-      if (pos >= len) { return false }
-      const ch = state.src.charCodeAt(pos);
-      if (ch === 0x23 /* # */) {
-        bdi_count += 1
-      } else {
-        break
-      }
-    }
-  }
-
-  if (state.src.charCodeAt(pos) !== 0x7b) { return false }
-  const fm_content_open_pos = pos
-  let fm_content_close_pos: number
-  pos++
-
-  // 找到内联片段宏的开始与关闭符号
-  for (; ;) {
-    if (pos >= len) { return false }
-    const ch = state.src.charCodeAt(pos);
-    if (ch === 0x7d /* } */) {
-      fm_content_close_pos = pos
-      if (has_bdi) {
-        
-      }
-      break
-    }
-  }
-
-  return false;
+  state.process_pair_delimiter(delimiters, processor, (delimiters) => {
+    return delimiters.marker === 0x5b /* [ */
+  })
 }
 
+export const fragment_macro_post_processing: InlineRulePPProcessor = (state) => {
+  const tokens_meta = state.tokens_meta,
+    max = state.tokens_meta.length;
 
+  process_delimiters(state, state.delimiters);
 
-const props: InlineRulePPProcessor = (state) => {
-  const tokens = state.tokens;
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-
-    // 从 text token 提取 props
-    if (token.type === "text") {
-
+  for (let curr = 0; curr < max; curr++) {
+    if (tokens_meta[curr] && tokens_meta[curr].delimiters) {
+      process_delimiters(state, tokens_meta[curr].delimiters);
     }
   }
-}
-
-export default props;
+};

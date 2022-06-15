@@ -3,8 +3,8 @@ import InlineState, { Delimiter } from "../../state/InlineState";
 import { Nesting } from "../../Token";
 
 const bold: InlineRuleProcessor = (state, silent) => {
-  const first_code = state.src.charCodeAt(state.pos);
   if (silent) { return false; }
+  const first_code = state.src.charCodeAt(state.pos);
 
   if (first_code !== 0x2A /* * */) {
     return false
@@ -75,7 +75,7 @@ function process_delimiters(state: InlineState, delimiters: InlineState["delimit
     delimiters,
     processor,
     (delimiters) => {
-      return delimiters.marker === 0x2A/* * */ && delimiters.end !== -1
+      return delimiters.marker === 0x2A/* * */
     }
   );
 }

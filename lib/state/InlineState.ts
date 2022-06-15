@@ -19,7 +19,9 @@ export type Delimiter = {
   /** 分隔符是否可以关闭 */
   close: boolean,
   /** 分隔符是否两边连接着单词 */
-  near_word: boolean
+  near_word: boolean,
+  /** 分隔符的匹配目标分隔符的字符码 */
+  match_target?: number
 }
 
 export default class InlineState extends State {
@@ -178,7 +180,7 @@ export default class InlineState extends State {
       const start_delimiter = delimiters[i];
       const end_delimiter_index = start_delimiter.end
 
-      if (!validator(start_delimiter)) {
+      if (start_delimiter.end === -1 || !validator(start_delimiter)) {
         continue;
       }
 

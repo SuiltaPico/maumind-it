@@ -171,6 +171,11 @@ export default class Renderer {
       } else {
         // 否则使用默认的渲染规则
         promises.push(this.render_token(tokens, i, options, env));
+        if (tokens[i].children !== undefined) {
+          for (let i = 0; i < tokens[i].children!.length; i++) {
+            promises.push(this.render_token(tokens[i].children!, i, options, env));
+          }
+        }
       }
     }
 

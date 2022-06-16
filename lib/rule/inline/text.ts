@@ -11,6 +11,8 @@ function isTerminatorChar(ch: number) {
     case 0x24/* $ */:
     case 0x25/* % */:
     case 0x26/* & */:
+    case 0x28/* ( */:
+    case 0x29/* ) */:
     case 0x2A/* * */:
     case 0x2B/* + */:
     case 0x2D/* - */:

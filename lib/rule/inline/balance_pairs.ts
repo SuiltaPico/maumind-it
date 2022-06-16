@@ -89,7 +89,7 @@ function process_delimiters(delimiters: Delimiter[]) {
           closer_record[1]++
           records[closer_record[1]][0] = i
           records[closer_record[1]][1] = level
-        } else {
+        } else if (records[closer_record[1]][1] === level) {
           de.end = records[closer_record[1]][0]
           closer_record[1]--
         }

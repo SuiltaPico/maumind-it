@@ -1,7 +1,7 @@
 import { render_latex } from "../../common/render_latex";
-import { RendererRuleProcessor } from "../../renderer/Renderer";
+import { RendererPromiseRuleProcessor } from "../../renderer/Renderer";
 
-const latex: RendererRuleProcessor = async (
+const latex: RendererPromiseRuleProcessor = async (
   tokens, index, options, env, renderer
 ) => {
   const token = tokens[index]

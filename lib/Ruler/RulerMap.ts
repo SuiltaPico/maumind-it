@@ -5,6 +5,17 @@ export default class RulerMap<T extends RuleFn> implements Ruler<T> {
   rules: Map<string, Rule<T>> = new Map()
   cache?: { [key: string]: { [key: string]: T } }
 
+  constructor(rules?: { [key: string]: T | { tags: string[], processor: T } }) {
+    for (let i in rules) {
+      const rule = rules[i]
+      if (typeof rule === "function") {
+        this.push(i, rule)
+      } else {
+        this.push(i, rule.processor, rule.tags)
+      }
+    }
+  }
+
   #compile() {
     this.cache = {}
     this.rules.forEach((r, n) => {
@@ -101,12 +112,12 @@ export default class RulerMap<T extends RuleFn> implements Ruler<T> {
     return result;
   }
 
-  push([name, rule_fn]: [string, T]) {
-    let rule: Rule<T> = {
+  push(name: string, rule_fn: T, tags?: string[]) {
+    const rule: Rule<T> = {
       name,
       enabled: true,
       fn: rule_fn,
-      tag: []
+      tag: tags ?? []
     }
     this.rules.set(name, rule)
   }

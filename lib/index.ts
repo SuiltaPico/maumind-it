@@ -9,6 +9,16 @@ import { RuleFn } from "./Ruler/Rule";
 import Ruler from "./Ruler/Ruler";
 import CoreState from "./state/CoreState";
 
+import "katex/dist/katex.min.css"
+import "katex/dist/fonts/KaTeX_Main-Regular.woff2"
+import "katex/dist/fonts/KaTeX_Main-Bold.woff2"
+import "katex/dist/fonts/KaTeX_Math-Italic.woff2"
+import "katex/dist/fonts/KaTeX_Size1-Regular.woff2"
+import "katex/dist/fonts/KaTeX_Size2-Regular.woff2"
+import "katex/dist/fonts/KaTeX_AMS-Regular.woff2"
+import "katex/dist/fonts/KaTeX_Script-Regular.woff2"
+import "katex/dist/fonts/KaTeX_Size1-Regular.woff2"
+
 export interface RulerSwitchTable {
   [key: string]: boolean
 }
@@ -37,12 +47,13 @@ export interface MaudownItEnv {
 export default class MaudownIt {
   options = {
     max_nesting: Infinity,
-    linkify: new LinkifyIt,
+    //linkify: new LinkifyIt,
     xhtmlOut: false,
     breaks: false,
-    highlight: (() => "") as (
-      (content: string, lang_name: string, lang_attrs: string) => string
-    ),
+    highlight: undefined as undefined | ((src: string, lang: string, attr: string) => string),
+    // (() => "") as (
+    //   (content: string, lang_name: string, lang_attrs: string) => string
+    // ),
     html: false,
   }
   linkify = new LinkifyIt
@@ -87,7 +98,7 @@ export default class MaudownIt {
   }
 
   #get_ruler(rule_group: RuleGroupsName): Ruler<RuleFn> {
-    if (rule_group === "core" || rule_group === "block" || rule_group === "inline" || rule_group === "renderer") {
+    if (rule_group === "core" || rule_group === "block" || rule_group === "inline") {
       return this[rule_group].ruler
     } else if (rule_group === "inline_post_processing") {
       return this.inline.ruler

@@ -1,5 +1,5 @@
 import MaudownIt from "..";
-import balance_pairs from "../rule/inline/balance_pairs";
+import balance_pairs from "../rule/inline/balance_pairs2";
 import bold, { bold_post_processing } from "../rule/inline/bold";
 import emphasis, { emphasis_post_processing } from "../rule/inline/emphasis";
 import escape from "../rule/inline/escape";
@@ -154,6 +154,6 @@ export default class ParserInline {
     }
 
     // console.log("inline post processing", state.tokens.slice())
-    // console.log("inline post processed delimiters", JSON.parse(JSON.stringify(state.delimiters)))
+    console.log("inline post processed delimiters", JSON.parse(JSON.stringify(state.delimiters)))
   }
 }

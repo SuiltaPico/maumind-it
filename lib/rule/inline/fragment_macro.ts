@@ -1,14 +1,18 @@
 import { InlineRulePPProcessor, InlineRuleProcessor } from "../../parser/ParserInline";
 import InlineState, { Delimiter } from "../../state/InlineState";
 import Token, { Nesting } from "../../Token";
+import make_anchor from "./macros/make_anchor";
 import make_id from "./macros/make_id";
-import make_id_and_link from "./macros/make_id_and_link";
+import make_image from "./macros/make_image";
+import make_link from "./macros/make_link";
 
 export type FragmentMacroProcessor = (state: InlineState, tokens: Token[], param: string) => void
 
 export const macros: { [name: string]: FragmentMacroProcessor } = {}
 macros["#"] = make_id
-macros["##"] = make_id_and_link
+macros["##"] = make_anchor
+macros["@"] = make_link
+macros["!"] = make_image
 
 const match_target_map = {
   0x5b: 0x5d,
@@ -66,6 +70,7 @@ function process_delimiters(state: InlineState, delimiters: Delimiter[]) {
       return 0
     }
 
+
     const body_end_delimiter = delimiters[body_start_delimiter.end]
 
     const tokens = state.tokens;
@@ -73,16 +78,11 @@ function process_delimiters(state: InlineState, delimiters: Delimiter[]) {
     const bsde_token = tokens[body_start_delimiter.token_index]
     const bede_token = tokens[body_end_delimiter.token_index]
 
-    bsde_token.tag = "span"
-    bsde_token.type = "span_open"
-    bsde_token.nesting = Nesting.Opening
+    bsde_token.children = []
+    bede_token.children = []
+
     bsde_token.content = ""
-
-    bede_token.tag = "span"
-    bede_token.type = "span_close"
-    bede_token.nesting = Nesting.Closing
     bede_token.content = ""
-
     tokens[start_delimiter.token_index].content = ""
     tokens[end_delimiter.token_index].content = ""
 
@@ -147,7 +147,23 @@ function process_delimiters(state: InlineState, delimiters: Delimiter[]) {
       macro_processor(state, body_tokens, para)
     }
 
-    return 3
+    if (bsde_token.children.length !== 0) {
+      const old_attrs_entries = Object.entries(bsde_token.attrs)
+      const first_children_token_entries = Object.entries(bsde_token.children[0])
+      for (let i = 0; i < first_children_token_entries.length; i++) {
+        const [name, value] = first_children_token_entries[i];
+        // @ts-ignore
+        bsde_token[name] = value
+      }
+      for (let i = 0; i < old_attrs_entries.length; i++) {
+        const [name, value] = old_attrs_entries[i];
+        // @ts-ignore
+        bsde_token.attrs[name] = value
+      }
+      bsde_token.children.splice(0, 1)
+    }
+
+    return 0
   }
 
   state.process_pair_delimiter(delimiters, processor, (delimiters) => {

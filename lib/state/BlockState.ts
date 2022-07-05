@@ -59,6 +59,8 @@ export default class BlockState extends State {
 
   props_history_stack: Optional<BlockStateProps>[] = [{}]
 
+  block_indent: number = 0;
+
   constructor(src: string, md: MaudownIt, env: MaudownItEnv, tokens: Token[]) {
     super(src, md, env)
     console.time("block_state_init")

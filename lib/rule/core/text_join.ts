@@ -27,7 +27,9 @@ const text_join: CoreRuleProcessor = (state) => {
     for (; curr < max; curr++) {
       if (tokens[curr].type === 'text' &&
         curr + 1 < max &&
-        tokens[curr + 1].type === 'text'
+        tokens[curr + 1].type === 'text' &&
+        !tokens[curr].children &&
+        !tokens[curr + 1].children
       ) {
 
         // 折叠两个相邻的文本节点

@@ -128,12 +128,12 @@ const list: BlockRuleProcessor = (state, start_line, end_line, silent) => {
   let { is_ordered, pos_after_marker, marker_value } = list_item_info
 
   // 如果我们在段落后立即开始一个新的无序列表，则第一行不应为空。
-  if (is_terminating_paragraph) {
+  /*if (is_terminating_paragraph) {
     if (
       state.skip_space(pos_after_marker) >=
       state.line_begin_index[start_line]
     ) return false;
-  }
+  }*/
 
   // 对于验证模式，我们可以立即终止
   if (silent) { return true; }
@@ -227,11 +227,19 @@ const list: BlockRuleProcessor = (state, start_line, end_line, silent) => {
     const new_indent_count = indent_count.slice(next_line, content_line + 1)
     new_indent_count[0] = list_indent + 1
 
+    const paragraph_open_token_index = state.tokens.length
+
     // 去除列表标记，token 化内容
     state.md.block.range_tokenize(
       state, [next_line, pos_after_marker], [content_line],
       new_indent_count,
     );
+    if (state.tokens[paragraph_open_token_index]) {
+      state.tokens[paragraph_open_token_index].hidden = true;
+    state.tokens[paragraph_open_token_index + 2].hidden = true;
+    }
+    
+
 
     const item_close_token = state.push('list_item_close', 'li', Nesting.Closing);
     item_close_token.markup = String.fromCharCode(marker_char_code);

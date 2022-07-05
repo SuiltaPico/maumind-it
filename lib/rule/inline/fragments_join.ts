@@ -20,11 +20,12 @@ const fragments_join: InlineRulePPProcessor = (state) => {
     if (tokens[curr].nesting === Nesting.Closing) level--;
     tokens[curr].level = level;
     if (tokens[curr].nesting === Nesting.Opening) level++;
-  
-    if (
-      tokens[curr].type === 'text' &&
-      curr + 1 < max &&
-      tokens[curr + 1].type === 'text'
+
+    if (tokens[curr].type === 'text'
+      && curr + 1 < max
+      && tokens[curr + 1].type === 'text'
+      && !tokens[curr].children
+      && !tokens[curr + 1].children
     ) {
 
       // 折叠两个相邻的文本节点

@@ -2,10 +2,8 @@ import { BlockRuleProcessor } from "../../parser/ParserBlock";
 import { Nesting } from "../../Token";
 
 const paragraph: BlockRuleProcessor = (state, start_line, end_line) => {
-  state.push_props()
-  state.set_props({
-    parent_type: "paragraph"
-  })
+  const old_parent_type = state.parent_type;
+  state.parent_type = 'paragraph';
 
   /** 非段落的行 */
   let end: number
@@ -48,7 +46,7 @@ const paragraph: BlockRuleProcessor = (state, start_line, end_line) => {
 
   state.push('paragraph_close', 'p', Nesting.Closing);
 
-  state.revert()
+  state.parent_type = old_parent_type;
 
   return true;
 };

@@ -8,20 +8,22 @@ import State from "./State";
 export type Delimiter = {
   /** 起始标记的字符码。 */
   marker: number
-  /** 这些分隔符系列的总长度。  */
+  /** 这些定界符系列的总长度。  */
   length: number
-  /** 分隔符对应的 token 的索引。 */
+  /** 定界符对应的 token 的索引。 */
   token_index: number
-  /** 如果分隔符被匹配为一个有效的开始符，`end` 将等于它的位置，否则它是 `-1`。 */
+  /** 如果定界符被匹配为一个有效的开始符，`end` 将等于它的位置，否则它是 `-1`。 */
   end: number
-  /** 分隔符是否可以打开 */
+  /** 定界符是否可以打开 */
   open: boolean
-  /** 分隔符是否可以关闭 */
+  /** 定界符是否可以关闭 */
   close: boolean,
-  /** 分隔符是否两边连接着单词 */
+  /** 定界符是否两边连接着单词 */
   near_word: boolean,
-  /** 分隔符的匹配目标分隔符的字符码 */
+  /** 定界符的匹配目标定界符的字符码 */
   match_target?: number
+  /** 当定界符开启后，忽略其它所有定界符的作用，直到该定界符被关闭。 */
+  ignore_others?: boolean
 }
 
 export default class InlineState extends State {
@@ -35,9 +37,9 @@ export default class InlineState extends State {
   pending_level = 0
   /** 存储 { start: end } 对。对于对解析的回溯优化（强调，罢工）很有用。 */
   cache: number[] = []
-  /** 当前标签的类似强调的分隔符列表 */
+  /** 当前标签的类似强调的定界符列表 */
   delimiters: Delimiter[] = []
-  /** 上层标签的分隔符列表堆栈 */
+  /** 上层标签的定界符列表堆栈 */
   _prev_delimiters: (any[] | undefined)[] = []
   /** 反引号长度 => 最后看到的位置 */
   backticks: { [key: number]: number } = {}
